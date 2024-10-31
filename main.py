@@ -1,5 +1,5 @@
 import numpy as np
-
+import sympy as sp
 def get_dummy_gauss():
     A = np.array([[1, 2, 3],
                [2, 5, 5],
@@ -14,6 +14,15 @@ def get_dummy_seidel():
               [1, 0.5, 3]], dtype=float)
 
     b = np.array([1, 1.75, 2.5], dtype=float)
+
+    return A, b
+
+def get_dummy_matrix():
+    A = np.array([[10, 1, 0, 1],
+                  [1, 12, 2, 0],
+                  [0, 2, 15, 4],
+                  [1, 0, 4, 20]], dtype=float)
+    b = np.array([1, 2, 3, 4], dtype=float)
 
     return A, b
 
@@ -105,8 +114,50 @@ def print_augmented(Ab):
     print("Матриця А:\n", Ab[:, :n])
     print("Вектор b:\n", Ab[:, n])
 
+def check_convergence_seidel(A):
+    # Достатня умова збіжності 1
+    for i in range(n):
+        sum = 0
+        j = 0
+        for j in range(n):
+            if j == i:
+                continue
+            sum += np.abs(A[i, j])
+        if np.abs(A[i, i]) < sum:
+            print("Достатня умова збіжності |A(i,i)| >= sum(|A(i,j)|), j = 1 && j != i) не виконується")
+            exit(1)
+    # Достатня умова збіжності 2
+    if not np.array_equal(A, A.transpose()):
+        print("Матриця А не є симетричною - пошук мінімального власного значення степеневим методом неможливий")
+        exit(1)
+    if not np.all(np.linalg.eigvals(A)) > 0:
+        print("Матриця А не є додатно визначеною - пошук мінімального власного значення степеневим методом неможливий")
+        exit(1)
+
+    # Необхідна і достатня умова збіжності
+    lambdaA = np.empty(shape=(n, n))
+    A_sp = sp.Matrix(A)
+    l_symb = sp.symbols("l")
+
+    def lAset(i, j):
+        if j <= i:
+            return A_sp[i, j] * l_symb
+        else:
+            return A_sp[i, j]
+
+    lambdaA = sp.Matrix(n, n, lAset)
+    lamb_set = sp.solveset(lambdaA.det(), l_symb, domain=sp.S.Reals)
+    for lamb in lamb_set:
+        if np.abs(lamb) > 1:
+            print("Необхідна і достатня умова збіжності |lambda| < 1 не виконується")
+            exit(1)
+        
+    
+
+
 # 3. Метод Зейделя
 def seidel_method(A, b, eps, max_iterations=1000):
+    check_convergence_seidel(A)
     n = len(b)
     x = np.zeros_like(b)  # Початкове наближення (вектор нулів)
     
@@ -118,14 +169,19 @@ def seidel_method(A, b, eps, max_iterations=1000):
             sum2 = np.dot(A[i, i+1:], x[i+1:])  # Використовуємо старі значення з попередньої ітерації
             
             x_new[i] = round((b[i] - sum1 - sum2) / A[i, i], 2)
-        
+
+        print("Ітерація:", iteration+1)
+        print("x:", x_new)
+
         # Перевіряємо умову припинення
-        if np.linalg.norm(x_new - x, ord=np.inf) < eps:
+        norm = np.linalg.norm(x_new - x, ord=np.inf)
+        print("||" + "x" + "(" + str(iteration + 1) + ") - x(" + str(iteration) + ")|| = " + str(norm))
+        if norm < eps:
+            print("Умова припинення виконується")
             return x_new, iteration+1
-        
+
+        print("Умова припинення не виконується")        
         x = x_new
-    
-    raise ValueError("Метод Зейделя не збігся за задану кількість ітерацій")
 
 # 4. Обчислення числа обумовленості
 def condition_number(A):
@@ -134,15 +190,16 @@ def condition_number(A):
     norm_A = np.linalg.norm(A[:, :], ord=np.inf)
     norm_A_inv = np.linalg.norm(A_inv[:, :], ord=np.inf)
 
-    print("Норма А:", norm_A)
+    print("\nНорма А:", norm_A)
     print("Норма А^(-1):", norm_A_inv)
 
     return norm_A * norm_A_inv
 
 # Приклад використання:
-n = 3
-A, b = get_dummy_gauss()
+n = 4
+#A, b = get_dummy_gauss()
 #A, b = get_dummy_seidel()
+A, b = get_dummy_matrix()
 #A, b = generate_dd_matrix_and_vector(n)
 
 print("Матриця А:\n", A)
@@ -163,11 +220,10 @@ print("Визначник матриці А:\n", determinant)
 print("\nМетод Зейделя:\n")
 A_seidel = A.copy()
 b_seidel = b.copy()
-eps = 0.5
+eps = 1e-1
 x_seidel, iterations = seidel_method(A_seidel, b_seidel, eps)
 print("Розв'язок методом Зейделя:\n", x_seidel)
 print("Кількість ітерацій:\n", iterations)
 
 # Число обумовленості
-
 print("\nЧисло обумовленості А:\n", condition_number(A))
